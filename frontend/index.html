@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LogSense AI — Ask your logs</title>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#eef2f6;--bg2:#e3e9f0;--card:#fff;--text:#0f1b2d;--text2:#4a5a70;--text3:#7d8ca1;
+  --line:#cdd6e1;--signal:#ff5b2e;--steel:#2f5f9e;--ok:#1f9d6b;--warn:#c98a00;--err:#d6303f;
+  --sans:'Familjen Grotesk',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+[data-theme="dark"]{
+  --bg:#0b1220;--bg2:#101a2e;--card:#131f35;--text:#e8eef7;--text2:#9fb0c8;--text3:#6a7b95;
+  --line:#243350;--signal:#ff7a52;--steel:#6ea4ee;--ok:#3ccf91;--warn:#f0b429;--err:#ff6370;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.6;transition:background .3s,color .3s}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* NAV */
+nav{position:fixed;inset:0 0 auto 0;z-index:50;height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 32px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:700;font-size:20px;letter-spacing:-.3px}
+.logo i{width:30px;height:30px;border-radius:6px;background:var(--text);color:var(--bg);display:grid;place-items:center;font-style:normal;font-family:var(--mono);font-size:14px}
+.logo b{color:var(--signal)}
+.nav-links{display:flex;gap:4px;list-style:none}
+.nav-links a{padding:8px 14px;border-radius:6px;font-size:14px;font-weight:500;color:var(--text2);text-decoration:none}
+.nav-links a:hover{color:var(--text);background:var(--bg2)}
+.nav-links a.active{color:var(--text);box-shadow:inset 0 -2px 0 var(--signal);border-radius:0}
+.nav-right{display:flex;gap:10px;align-items:center}
+.theme-toggle{width:38px;height:38px;border-radius:6px;border:1px solid var(--line);background:var(--card);cursor:pointer;font-size:16px}
+.btn{display:inline-block;padding:11px 22px;border-radius:6px;background:var(--signal);color:#fff;font:600 14px var(--sans);border:0;cursor:pointer;text-decoration:none;transition:transform .15s,filter .15s}
+.btn:hover{transform:translateY(-1px);filter:brightness(1.07)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.btn.line{background:transparent;color:var(--text);border:1px solid var(--text)}
+
+/* HERO */
+#home{min-height:100vh;padding:120px 32px 72px;display:flex;align-items:center}
+.hero{max-width:1080px;margin:0 auto;width:100%;display:grid;grid-template-columns:1.05fr 1fr;gap:56px;align-items:center}
+h1{font-size:clamp(44px,6vw,80px);line-height:.96;letter-spacing:-2.5px;font-weight:700}
+h1 span{display:block;color:var(--text3)}
+.hero p{margin:22px 0 30px;max-width:440px;color:var(--text2);font-size:18px}
+.hero-btns{display:flex;gap:12px;flex-wrap:wrap}
+.stack{margin-top:36px;font:500 12px var(--mono);color:var(--text3)}
+.stack b{color:var(--text);font-weight:500}
+
+/* Hero log card (the one memorable element) */
+.logcard{background:#0c1424;color:#cfd9e8;border-radius:10px;overflow:hidden;box-shadow:0 24px 60px -20px rgba(15,27,45,.45);font:400 12.5px/1.9 var(--mono)}
+.logcard-bar{padding:10px 16px;background:#142039;color:#7d8ca1;font-size:11px;display:flex;justify-content:space-between}
+.logcard-body{padding:16px 18px}
+.ll{display:grid;grid-template-columns:62px 58px 1fr;gap:8px;padding:0 6px;border-left:3px solid transparent}
+.ll.e{border-color:#ff6370;background:rgba(255,99,112,.09)}
+.ll.w{border-color:#f0b429}
+.ll.c{border-color:#ff7a52;background:rgba(255,122,82,.13)}
+.ll em{font-style:normal;color:#6a7b95}
+.ll .e-t{color:#ff6370}.ll .w-t{color:#f0b429}.ll .c-t{color:#ff7a52;font-weight:500}
+.verdict{margin-top:14px;padding:14px 16px;background:#18284a;border-radius:8px;font:400 13px/1.7 var(--sans);color:#e8eef7}
+.verdict b{color:#ff7a52}
+.verdict code{font-family:var(--mono);background:#0c1424;padding:1px 6px;border-radius:4px;color:#7fd1ff}
+
+/* SECTIONS */
+section{padding:96px 32px}
+.wrap{max-width:1080px;margin:0 auto}
+.sec-head{margin-bottom:40px}
+.sec-head h2{font-size:clamp(30px,4vw,46px);letter-spacing:-1.2px;line-height:1.05;font-weight:700}
+.sec-head p{color:var(--text2);margin-top:10px;max-width:520px}
+
+/* APP */
+#app{background:var(--bg2);padding:88px 0 0}
+#app .sec-head{padding:0 32px;max-width:1144px;margin:0 auto 32px}
+.shell{display:grid;grid-template-columns:360px 1fr;height:680px;border-top:1px solid var(--line);background:var(--card)}
+.left{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.ptop{padding:14px 20px;border-bottom:1px solid var(--line);font:500 12px var(--mono);color:var(--text3);display:flex;justify-content:space-between}
+.zone{flex:1;padding:16px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.drop{border:1.5px dashed var(--line);border-radius:8px;padding:18px;text-align:center;cursor:pointer;font-size:13px;color:var(--text2);transition:.2s}
+.drop:hover,.drop.drag-over{border-color:var(--signal);background:color-mix(in srgb,var(--signal) 7%,transparent)}
+.drop strong{color:var(--text)}
+textarea{font-family:inherit}
+.logs{width:100%;min-height:170px;flex:1;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;color:var(--text);font:400 12px/1.7 var(--mono);resize:vertical}
+.logs:focus,.qin:focus{border-color:var(--signal);outline:none}
+.char{font:400 11px var(--mono);color:var(--text3)}
+.bar{height:3px;background:var(--line);border-radius:2px;overflow:hidden;display:none}
+.bar.active{display:block}
+.bar div{height:100%;width:0;background:var(--signal);transition:width .4s}
+.btn.full{width:100%}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line)}
+.stat{padding:12px 16px;border-right:1px solid var(--line)}
+.stat:last-child{border:0}
+.stat b{display:block;font-size:22px;line-height:1.2}
+.stat span{font-size:11px;color:var(--text3)}
+.stat.w b{color:var(--warn)}.stat.e b{color:var(--err)}
+
+.right{display:flex;flex-direction:column;min-height:0;background:var(--bg)}
+.ctop{padding:14px 28px;border-bottom:1px solid var(--line);background:var(--card);display:flex;justify-content:space-between;align-items:center;font:500 12px var(--mono);color:var(--text3)}
+.clear{background:none;border:1px solid var(--line);color:var(--text2);font:500 12px var(--sans);padding:4px 12px;border-radius:6px;cursor:pointer}
+.clear:hover{border-color:var(--signal);color:var(--signal)}
+.chat{flex:1;min-height:0;overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:16px;scroll-behavior:smooth}
+.empty-state{margin:auto;text-align:center;max-width:360px}
+.empty-title{font-size:24px;font-weight:700;letter-spacing:-.5px}
+.empty-sub{font-size:14px;color:var(--text2);margin-top:6px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:18px}
+.q-chip{padding:6px 14px;border:1px solid var(--line);border-radius:6px;background:var(--card);font-size:13px;color:var(--text2);cursor:pointer}
+.q-chip:hover{border-color:var(--signal);color:var(--signal)}
+.message{display:flex;gap:10px}
+.message.user{flex-direction:row-reverse}
+.avatar{width:30px;height:30px;border-radius:6px;display:grid;place-items:center;font-size:14px;flex-shrink:0;border:1px solid var(--line);background:var(--card)}
+.bubble{max-width:78%;padding:11px 15px;border-radius:8px;font-size:14px;line-height:1.7;border:1px solid var(--line);background:var(--card)}
+.bubble.user{background:var(--text);color:var(--bg);border-color:var(--text);text-align:right}
+.bubble code{font-family:var(--mono);font-size:12px;background:var(--bg2);padding:1px 5px;border-radius:4px}
+.ts{font-size:10px;color:var(--text3);margin-top:4px}
+.message.user .ts{text-align:right}
+.sev{display:inline-block;padding:0 7px;border-radius:4px;font:500 11px var(--mono);margin-right:3px}
+.sev.critical{background:color-mix(in srgb,var(--err) 16%,transparent);color:var(--err)}
+.sev.warning{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.sev.info{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.typing-bubble{display:flex;gap:5px;padding:14px 16px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.typing-bubble span{width:6px;height:6px;border-radius:50%;background:var(--text3);animation:tb 1.2s infinite}
+.typing-bubble span:nth-child(2){animation-delay:.2s}.typing-bubble span:nth-child(3){animation-delay:.4s}
+@keyframes tb{0%,60%,100%{transform:none}30%{transform:translateY(-5px)}}
+.inbar{padding:14px 28px 16px;border-top:1px solid var(--line);background:var(--card)}
+.inrow{display:flex;gap:10px;align-items:flex-end}
+.qin{flex:1;padding:12px 14px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);font:400 14px/1.5 var(--sans);resize:none;min-height:46px;max-height:120px}
+.send{width:46px;height:46px;padding:0;font-size:18px}
+.hint{font-size:11px;color:var(--text3);margin-top:8px}
+kbd{font:400 10px var(--mono);border:1px solid var(--line);border-radius:3px;padding:0 5px;background:var(--bg2)}
+
+/* PIPELINE */
+.pipe{display:grid;grid-template-columns:repeat(4,1fr);border-top:2px solid var(--text)}
+.pipe div{padding:22px 20px 0 0}
+.pipe small{font:500 12px var(--mono);color:var(--signal)}
+.pipe h3{font-size:19px;margin:6px 0;letter-spacing:-.3px}
+.pipe p{font-size:14px;color:var(--text2)}
+
+/* FEATURES */
+#features{background:var(--bg2)}
+.feats{display:grid;grid-template-columns:1fr 1fr;column-gap:56px}
+.feats div{padding:20px 0;border-top:1px solid var(--line)}
+.feats h3{font-size:18px;letter-spacing:-.3px}
+.feats p{font-size:14px;color:var(--text2);margin-top:4px}
+
+/* ABOUT */
+.about{display:grid;grid-template-columns:1.1fr 1fr;gap:64px;align-items:start}
+.about p{color:var(--text2);margin-bottom:14px}
+.tags{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 26px}
+.tags span{font:400 12px var(--mono);padding:4px 11px;border:1px solid var(--line);border-radius:5px;background:var(--card)}
+.author{display:flex;gap:16px;align-items:center;padding:18px;border:1px solid var(--text);border-radius:10px;background:var(--card)}
+.author .av{width:48px;height:48px;border-radius:8px;background:var(--signal);color:#fff;display:grid;place-items:center;font-weight:700;font-size:20px}
+.author strong{display:block;font-size:17px}
+.author span{font-size:13px;color:var(--text3)}
+.alinks{display:flex;gap:8px;margin-top:8px}
+.alinks a{font:500 12px var(--mono);padding:3px 10px;border:1px solid var(--line);border-radius:5px;text-decoration:none;color:var(--steel)}
+.alinks a:hover{border-color:var(--signal);color:var(--signal)}
+.tbl{border:1px solid var(--line);border-radius:10px;background:var(--card);overflow:hidden}
+.tbl div{display:flex;justify-content:space-between;gap:12px;padding:16px 20px;border-top:1px solid var(--line)}
+.tbl div:first-child{border:0}
+.tbl b{font-weight:600}.tbl span{color:var(--text3);font-size:14px}
+
+/* CONTACT + FOOTER */
+#contact{background:var(--text);color:var(--bg)}
+#contact .wrap{display:flex;justify-content:space-between;align-items:center;gap:32px;flex-wrap:wrap}
+#contact h2{font-size:clamp(30px,4vw,46px);letter-spacing:-1.2px;line-height:1.05}
+#contact p{opacity:.7;margin-top:8px}
+.clinks{display:flex;gap:12px;flex-wrap:wrap}
+.clinks a{padding:14px 22px;border:1px solid rgba(255,255,255,.3);border-radius:8px;text-decoration:none;min-width:200px}
+.clinks a:hover{border-color:var(--signal)}
+.clinks b{display:block}.clinks span{font:400 12px var(--mono);opacity:.65}
+footer{padding:22px 32px;border-top:1px solid var(--line);font-size:13px;color:var(--text3)}
+footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,16px);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:11px 20px;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.2);opacity:0;transition:.3s;pointer-events:none;z-index:99}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.success{border-color:var(--ok)}.toast.error{border-color:var(--err)}
+
+@media(max-width:900px){
+  .hero,.about,.feats{grid-template-columns:1fr}
+  .logcard{display:none}
+  .nav-links{display:none}
+  .shell{grid-template-columns:1fr;grid-template-rows:auto 1fr;height:auto}
+  .left{max-height:420px}.right{height:560px}
+  .pipe{grid-template-columns:1fr 1fr}
+}
+@media(max-width:560px){.pipe{grid-template-columns:1fr}nav{padding:0 16px}section{padding:72px 20px}}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="#home" class="logo"><i>&gt;_</i>Log<b>Sense</b></a>
+  <ul class="nav-links">
+    <li><a href="#home" class="active" onclick="setActive(this)">Home</a></li>
+    <li><a href="#app" onclick="setActive(this)">Analyzer</a></li>
+    <li><a href="#how-it-works" onclick="setActive(this)">How it works</a></li>
+    <li><a href="#features" onclick="setActive(this)">Features</a></li>
+    <li><a href="#about" onclick="setActive(this)">About</a></li>
+    <li><a href="#contact" onclick="setActive(this)">Contact</a></li>
+  </ul>
+  <div class="nav-right">
+    <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn" aria-label="Toggle theme">🌙</button>
+    <a href="#app" class="btn">Open analyzer</a>
+  </div>
+</nav>
+
+<section id="home">
+  <div class="hero">
+    <div>
+      <h1>Ask your logs<span>why it broke.</span></h1>
+      <p>Paste production logs, ask a question, and get the root cause, a severity rating, and the fix, grounded in your actual log lines.</p>
+      <div class="hero-btns">
+        <a href="#app" class="btn">Analyze logs</a>
+        <a href="#how-it-works" class="btn line">See how it works</a>
+      </div>
+      <div class="stack"><b>RAG</b> · <b>FAISS</b> · <b>LLaMA 3</b> · <b>FastAPI</b></div>
+    </div>
+    <div class="logcard">
+      <div class="logcard-bar"><span>production.log</span><span>5 lines · 1 incident</span></div>
+      <div class="logcard-body">
+        <div class="ll w"><em>10:02:49</em><span class="w-t">WARN</span><span>DB response slow (2.3s)</span></div>
+        <div class="ll e"><em>10:02:51</em><span class="e-t">ERROR</span><span>[db] Connection timeout</span></div>
+        <div class="ll e"><em>10:02:52</em><span class="e-t">ERROR</span><span>[db] Connection refused</span></div>
+        <div class="ll c"><em>10:02:52</em><span class="c-t">CRIT</span><span>Service failed to start</span></div>
+        <div class="ll e"><em>10:02:55</em><span class="e-t">ERROR</span><span>Pod: CrashLoopBackOff</span></div>
+        <div class="verdict"><b>Root cause:</b> the database connection pool is exhausted.<br/><b>Fix:</b> raise <code>max_connections</code>, then restart the service pod.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="app">
+  <div class="sec-head">
+    <h2>Log analysis console</h2>
+    <p>Add your logs on the left, then ask the AI about them on the right.</p>
+  </div>
+  <div class="shell">
+    <div class="left">
+      <div class="ptop"><span>1 · Add logs</span><span>.log .txt .json</span></div>
+      <div class="zone">
+        <div class="drop" id="dropArea" onclick="document.getElementById('fileInput').click()">
+          <input type="file" id="fileInput" style="display:none" accept=".log,.txt,.json" onchange="handleFile(event)"/>
+          <strong>Drop a log file here</strong><br/>or click to browse
+        </div>
+        <textarea class="logs" id="logs" oninput="updateCharCount()" placeholder="Or paste raw logs here…&#10;&#10;2024-01-15 10:23:45 ERROR DB timeout&#10;2024-01-15 10:23:46 CRITICAL Connection failed"></textarea>
+        <div class="char" id="charCount">0 chars</div>
+        <div class="bar" id="progressBar"><div id="progressFill"></div></div>
+        <button class="btn full" id="uploadBtn" onclick="upload()">Ingest logs</button>
+      </div>
+      <div class="stats">
+        <div class="stat"><b id="statChunks">0</b><span>Chunks</span></div>
+        <div class="stat w"><b id="statWarn">0</b><span>Warnings</span></div>
+        <div class="stat e"><b id="statErr">0</b><span>Errors</span></div>
+        <div class="stat"><b id="statSessions">0</b><span>Queries</span></div>
+      </div>
+    </div>
+    <div class="right">
+      <div class="ctop"><span>2 · Ask</span><button class="clear" onclick="clearChat()">Clear chat</button></div>
+      <div class="chat" id="chat">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-title">Ingest logs, then ask</div>
+          <div class="empty-sub">Try a question about errors, crashes, or slow services.</div>
+          <div class="chips">
+            <div class="q-chip" onclick="fillQuery(this.innerText)">What caused the crash?</div>
+            <div class="q-chip" onclick="fillQuery(this.innerText)">List all critical errors</div>
+            <div class="q-chip" onclick="fillQuery(this.innerText)">Memory leak analysis</div>
+            <div class="q-chip" onclick="fillQuery(this.innerText)">Database issues?</div>
+            <div class="q-chip" onclick="fillQuery(this.innerText)">Summarize anomalies</div>
+          </div>
+        </div>
+      </div>
+      <div class="inbar">
+        <div class="inrow">
+          <textarea class="qin" id="query" rows="1" placeholder="Ask about your logs, e.g. What caused the 500 errors?" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+          <button class="btn send" id="sendBtn" onclick="ask()" aria-label="Send">↑</button>
+        </div>
+        <div class="hint"><kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for a new line</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how-it-works">
+  <div class="wrap">
+    <div class="sec-head"><h2>How it works</h2><p>Four steps from raw logs to an answer.</p></div>
+    <div class="pipe">
+      <div><small>Step 1</small><h3>Ingest</h3><p>Paste or upload logs in any format. They are parsed and split into chunks.</p></div>
+      <div><small>Step 2</small><h3>Embed and index</h3><p>Sentence Transformers turn each chunk into a vector stored in FAISS.</p></div>
+      <div><small>Step 3</small><h3>Retrieve</h3><p>Your question pulls the most relevant chunks as context for the model.</p></div>
+      <div><small>Step 4</small><h3>Analyze</h3><p>LLaMA 3 on Groq returns the root cause, severity, and fix steps.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head"><h2>What LogSense does</h2><p>Built to shorten the time between an alert and a fix.</p></div>
+    <div class="feats">
+      <div><h3>Root cause analysis</h3><p>Finds the underlying cause of a failure, not just the symptoms.</p></div>
+      <div><h3>Severity labels</h3><p>Every finding is tagged INFO, WARNING, or CRITICAL so you know what to fix first.</p></div>
+      <div><h3>Fix suggestions</h3><p>Concrete steps to resolve the issue, so you skip the stack-trace searching.</p></div>
+      <div><h3>Chat with your logs</h3><p>Ask follow-ups, narrow to one service, or request a summary.</p></div>
+      <div><h3>Fast answers</h3><p>FAISS search and Groq inference keep responses quick, even on large files.</p></div>
+      <div><h3>Keys stay private</h3><p>API keys live in a .env file, never in code. Logs are handled in-session.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="about">
+  <div class="wrap about">
+    <div>
+      <div class="sec-head" style="margin-bottom:20px"><h2>Built for real DevOps problems</h2></div>
+      <p>LogSense AI is an end-to-end RAG pipeline that makes log analysis conversational. Instead of grepping thousands of lines, ask a question and get an answer grounded in your own log data.</p>
+      <p>It combines a FastAPI backend, sentence-transformer embeddings, FAISS vector search, and LLaMA 3 on Groq for fast inference.</p>
+      <div class="tags"><span>FastAPI</span><span>LLaMA 3</span><span>FAISS</span><span>Groq</span><span>Sentence Transformers</span><span>Python</span></div>
+      <div class="author">
+        <div class="av">V</div>
+        <div>
+          <strong>B. Vighnesh</strong>
+          <span>Integrated M.Tech CSE · VIT-AP University</span>
+          <div class="alinks">
+            <a href="https://github.com/BVignesh10" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://www.linkedin.com/in/vighnesh-badugu-624a9539a/" target="_blank" rel="noopener">LinkedIn</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tbl">
+      <div><b>FastAPI</b><span>Backend server</span></div>
+      <div><b>LLaMA 3 via Groq</b><span>LLM engine</span></div>
+      <div><b>FAISS</b><span>Vector database</span></div>
+      <div><b>Sentence Transformers</b><span>Text embeddings</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="contact">
+  <div class="wrap">
+    <div><h2>Get in touch</h2><p>Feedback, ideas, or want to collaborate? Reach out.</p></div>
+    <div class="clinks">
+      <a href="https://github.com/BVignesh10" target="_blank" rel="noopener"><b>GitHub</b><span>github.com/BVignesh10</span></a>
+      <a href="https://www.linkedin.com/in/vighnesh-badugu-624a9539a/" target="_blank" rel="noopener"><b>LinkedIn</b><span>Vighnesh Badugu</span></a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>LogSense AI · Built by B. Vighnesh · Integrated M.Tech CSE, VIT-AP University</span>
+    <span><a href="#home">Home</a> · <a href="#app">Analyzer</a> · <a href="#about">About</a> · <a href="#contact">Contact</a></span>
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let queryCount=0,warnCount=0,errCount=0;
+
+function toggleTheme(){
+  const html=document.documentElement,btn=document.getElementById('themeBtn');
+  const isDark=html.getAttribute('data-theme')==='dark';
+  if(isDark){html.removeAttribute('data-theme');btn.textContent='🌙';try{localStorage.setItem('theme','light')}catch(e){}}
+  else{html.setAttribute('data-theme','dark');btn.textContent='☀️';try{localStorage.setItem('theme','dark')}catch(e){}}
+}
+(function(){
+  let s=null;try{s=localStorage.getItem('theme')}catch(e){}
+  if(s==='dark'){document.documentElement.setAttribute('data-theme','dark');document.getElementById('themeBtn').textContent='☀️';}
+})();
+
+function setActive(el){
+  document.querySelectorAll('.nav-links a').forEach(a=>a.classList.remove('active'));
+  el.classList.add('active');
+}
+const io=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      document.querySelectorAll('.nav-links a').forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+e.target.id));
+    }
+  });
+},{threshold:0.3});
+document.querySelectorAll('section[id]').forEach(s=>io.observe(s));
+
+const da=document.getElementById('dropArea');
+da.addEventListener('dragover',e=>{e.preventDefault();da.classList.add('drag-over');});
+da.addEventListener('dragleave',()=>da.classList.remove('drag-over'));
+da.addEventListener('drop',e=>{e.preventDefault();da.classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)readFile(f);});
+function handleFile(e){if(e.target.files[0])readFile(e.target.files[0]);}
+function readFile(file){
+  const r=new FileReader();
+  r.onload=ev=>{document.getElementById('logs').value=ev.target.result;updateCharCount();showToast('success','Loaded '+file.name);};
+  r.readAsText(file);
+}
+function updateCharCount(){
+  document.getElementById('charCount').textContent=document.getElementById('logs').value.length.toLocaleString()+' chars';
+}
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px';}
+
+async function upload(){
+  const logs=document.getElementById('logs').value.trim();
+  if(!logs){showToast('error','Paste or load some logs first');return;}
+  const btn=document.getElementById('uploadBtn'),bar=document.getElementById('progressBar'),fill=document.getElementById('progressFill');
+  btn.disabled=true;btn.textContent='Ingesting…';
+  bar.classList.add('active');
+  let p=0;
+  const ticker=setInterval(()=>{p=Math.min(p+Math.random()*18,90);fill.style.width=p+'%';},200);
+  warnCount=(logs.match(/\b(WARN|WARNING)\b/gi)||[]).length;
+  errCount=(logs.match(/\b(ERROR|CRITICAL)\b/gi)||[]).length;
+  try{
+    const res=await fetch('/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({log:logs})});
+    const data=await res.json();
+    clearInterval(ticker);fill.style.width='100%';
+    setTimeout(()=>{bar.classList.remove('active');fill.style.width='0';},600);
+    document.getElementById('statChunks').textContent=data.chunks||'—';
+    document.getElementById('statWarn').textContent=warnCount;
+    document.getElementById('statErr').textContent=errCount;
+    showToast('success',data.chunks+' chunks indexed. Ready for questions.');
+  }catch{
+    clearInterval(ticker);showToast('error','Upload failed. Check that the server is running.');
+  }
+  btn.disabled=false;btn.textContent='Ingest logs';
+}
+
+async function ask(){
+  const input=document.getElementById('query');
+  const q=input.value.trim();
+  if(!q)return;
+  hideEmpty();addMsg(q,'user');
+  input.value='';autoResize(input);
+  queryCount++;document.getElementById('statSessions').textContent=queryCount;
+  const sendBtn=document.getElementById('sendBtn');sendBtn.disabled=true;
+  const typingEl=addTyping();
+  try{
+    const res=await fetch('/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q})});
+    const data=await res.json();
+    typingEl.remove();addMsg(data.answer||'No response from server.','ai');
+  }catch{
+    typingEl.remove();addMsg('Server unreachable. Make sure the FastAPI backend is running.','ai');
+  }
+  sendBtn.disabled=false;
+}
+
+function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ask();}}
+function fillQuery(text){const i=document.getElementById('query');i.value=text;i.focus();autoResize(i);}
+function hideEmpty(){const es=document.getElementById('emptyState');if(es)es.style.display='none';}
+
+function addMsg(text,type){
+  const chat=document.getElementById('chat');
+  const wrap=document.createElement('div');wrap.className='message '+(type==='user'?'user':'');
+  const av=document.createElement('div');av.className='avatar';
+  av.textContent=type==='user'?'👤':'🤖';
+  const col=document.createElement('div');
+  const bub=document.createElement('div');bub.className='bubble '+type;
+  bub.innerHTML=formatResponse(text);
+  const ts=document.createElement('div');ts.className='ts';
+  ts.textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  col.appendChild(bub);col.appendChild(ts);
+  wrap.appendChild(av);wrap.appendChild(col);
+  chat.appendChild(wrap);chat.scrollTop=chat.scrollHeight;
+}
+
+function addTyping(){
+  const chat=document.getElementById('chat');
+  const wrap=document.createElement('div');wrap.className='message';
+  const av=document.createElement('div');av.className='avatar';av.textContent='🤖';
+  const bub=document.createElement('div');bub.className='typing-bubble';
+  bub.innerHTML='<span></span><span></span><span></span>';
+  wrap.appendChild(av);wrap.appendChild(bub);
+  chat.appendChild(wrap);chat.scrollTop=chat.scrollHeight;return wrap;
+}
+
+function formatResponse(text){
+  if(!text)return'';
+  text=text.replace(/\bCRITICAL\b/g,'<span class="sev critical">CRITICAL</span>');
+  text=text.replace(/\bWARNING\b/g,'<span class="sev warning">WARNING</span>');
+  text=text.replace(/\bINFO\b/g,'<span class="sev info">INFO</span>');
+  text=text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+  text=text.replace(/`([^`]+)`/g,'<code>$1</code>');
+  return text.replace(/\n/g,'<br/>');
+}
+
+function clearChat(){
+  document.getElementById('chat').innerHTML=`
+    <div class="empty-state" id="emptyState">
+      <div class="empty-title">Ingest logs, then ask</div>
+      <div class="empty-sub">Try a question about errors, crashes, or slow services.</div>
+      <div class="chips">
+        <div class="q-chip" onclick="fillQuery(this.innerText)">What caused the crash?</div>
+        <div class="q-chip" onclick="fillQuery(this.innerText)">List all critical errors</div>
+        <div class="q-chip" onclick="fillQuery(this.innerText)">Memory leak analysis</div>
+        <div class="q-chip" onclick="fillQuery(this.innerText)">Database issues?</div>
+        <div class="q-chip" onclick="fillQuery(this.innerText)">Summarize anomalies</div>
+      </div>
+    </div>`;
+  queryCount=0;document.getElementById('statSessions').textContent='0';
+}
+
+function showToast(type,msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast '+type+' show';
+  setTimeout(()=>t.className='toast',3000);
+}
+</script>
+</body>
+</html>

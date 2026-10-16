@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic
+fastembed
+faiss-cpu
+numpy
+groq
+python-dotenv
+requests
